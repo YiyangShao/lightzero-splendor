@@ -1,0 +1,12 @@
+[
+	{"points":3, "req": {"diamond":4, "sapphire":4}},
+	{"points":3, "req": {"diamond":4, "onyx":4}},
+	{"points":3, "req": {"sapphire":4, "emerald":4}},
+	{"points":3, "req": {"emerald":4, "ruby":4}},
+	{"points":3, "req": {"ruby":4, "onyx":4}},
+	{"points":3, "req": {"diamond":3, "sapphire":3, "emerald":3}},
+	{"points":3, "req": {"diamond":3, "emerald":3, "onyx":3}},
+	{"points":3, "req": {"diamond":3, "sapphire":3, "ruby":3}},
+	{"points":3, "req": {"sapphire":3, "ruby":3, "onyx":3}},
+	{"points":3, "req": {"emerald":3, "ruby":3, "onyx":3}}
+] 
