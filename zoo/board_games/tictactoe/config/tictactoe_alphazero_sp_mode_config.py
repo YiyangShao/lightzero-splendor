@@ -48,7 +48,7 @@ tictactoe_alphazero_config = dict(
             action_space_size=int(1 * 3 * 3),
             # We use the small size model for tictactoe.
             num_res_blocks=1,
-            num_channels=16,
+            num_channels=16, 
             value_head_hidden_channels=[8],
             policy_head_hidden_channels=[8],
         ),

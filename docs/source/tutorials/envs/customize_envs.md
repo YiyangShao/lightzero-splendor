@@ -24,6 +24,7 @@ In the specific implementation, these differences are primarily manifested in th
 Here are the basic steps to create a custom LightZero environment:
 
 ### 1. Create the Environment Class
+
 First, you need to create a new environment class that inherits from the `BaseEnv` class in DI-engine. For example:
 
 ```python
@@ -31,6 +32,7 @@ from ding.envs import BaseEnv
 ```
 
 ### 2. **__init__ Method**<br>
+
 In your custom environment class, you need to define an initialization method `__init__`. In this method, you need to set some basic properties of the environment, such as observation space, action space, reward space, etc. For example:
 
 ```python
@@ -41,6 +43,7 @@ def __init__(self, cfg=None):
 ```
 
 ### 3. **Reset Method**<br>
+
 The `reset` method is used to reset the environment to an initial state. This method should return the initial observation of the environment. For example:
 
 ```python
@@ -54,29 +57,31 @@ def reset(self):
 ```
 
 ### 4. **Step Method**<br>
+
 The `step` method takes an action as input, executes this action, and returns a tuple containing the new observation, reward, whether it's done, and other information. For example:
 
 ```python
 def step(self, action):
   # The core original env step.
     obs, rew, done, info = self.env.step(action)
-    
+  
     if self.cfg.continuous:
         action_mask = None
     else:
         # get the action_mask according to the legal action
         action_mask = np.ones(self.env.action_space.n, 'int8')
-    
+  
     lightzero_obs_dict = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
-    
+  
     self._eval_episode_return += rew
     if done:
         info['eval_episode_return'] = self._eval_episode_return
-    
+  
     return BaseEnvTimestep(lightzero_obs_dict, rew, done, info)
 ```
 
 ### 5. **Observation Space and Action Space**<br>
+
 In a custom environment, you need to provide properties for observation space and action space. These properties are `gym.Space` objects that describe the shape and type of observations and actions. For example:
 
 ```python
@@ -87,7 +92,7 @@ def observation_space(self):
 @property
 def action_space(self):
     return self._action_space
-    
+  
 @property
 def legal_actions(self):
     # get the actual legal actions
@@ -95,6 +100,7 @@ def legal_actions(self):
 ```
 
 ### 6. **Render Method**<br>
+
 The `render` method displays the gameplay of the game for users to observe. For environments that have implemented the `render` method, users can choose whether to call `render` during the execution of the `step` function to render the game state at each step.
 
 ```python
@@ -133,9 +139,11 @@ In the `render` function, there are three different modes available:
 During runtime, the mode used by render depends on the value of `self.render_mode`. If `self.render_mode` is set to None, the environment will not call the `render` method.
 
 ### 7. **Other Methods**<br>
+
 Depending on the requirement, you might also need to define other methods, such as `close` (for closing the environment and performing cleanup), etc.
 
 ### 8. **Register the Environment**<br>
+
 Lastly, you need to use the `ENV_REGISTRY.register` decorator to register your new environment so that it can be used in the configuration file. For example:
 
 ```python
@@ -167,12 +175,12 @@ Creating a custom environment may require a deep understanding of the specific t
 Here are the additional steps for creating custom board game environments in LightZero:
 
 1. There are three different modes for board game environments in LightZero: `self_play_mode`, `play_with_bot_mode`, and `eval_mode`. Here is an explanation of these modes:
-    - `self_play_mode`: In this mode, the environment follows the classical setup of board games. Each call to the `step` function places a move in the environment based on the provided action. At the time step when the game is decided, a reward of +1 is returned. In all other time steps where the game is not decided, the reward is 0.
-    - `play_with_bot_mode`: In this mode, each call to the `step` function places a move in the environment based on the provided action, followed by the bot generating an action and placing a move based on that action. In other words, the agent plays as player 1, and the bot plays as player 2 against the agent. At the end of the game, if the agent wins, a reward of +1 is returned. If the bot wins, a reward of -1 is returned. In case of a draw, the reward is 0. In all other time steps where the game is not decided, the reward is 0.
-    - `eval_mode`: This mode is used to evaluate the level of the current agent. There are two evaluation methods: bot evaluation and human evaluation. In bot evaluation, similar to play_with_bot_mode, the bot plays as player 2 against the agent, and the agent's win rate is calculated based on the results. In human evaluation, the user plays as player 2 and interacts with the agent by entering actions in the command line.
 
-    In each mode, at the end of the game, the `eval_episode_return` information from the perspective of player 1 is recorded (if player 1 wins, `eval_episode_return` is 1; if player 1 loses, it is -1; if it's a draw, it is 0), and it is logged in the last time step.
+   - `self_play_mode`: In this mode, the environment follows the classical setup of board games. Each call to the `step` function places a move in the environment based on the provided action. At the time step when the game is decided, a reward of +1 is returned. In all other time steps where the game is not decided, the reward is 0.
+   - `play_with_bot_mode`: In this mode, each call to the `step` function places a move in the environment based on the provided action, followed by the bot generating an action and placing a move based on that action. In other words, the agent plays as player 1, and the bot plays as player 2 against the agent. At the end of the game, if the agent wins, a reward of +1 is returned. If the bot wins, a reward of -1 is returned. In case of a draw, the reward is 0. In all other time steps where the game is not decided, the reward is 0.
+   - `eval_mode`: This mode is used to evaluate the level of the current agent. There are two evaluation methods: bot evaluation and human evaluation. In bot evaluation, similar to play_with_bot_mode, the bot plays as player 2 against the agent, and the agent's win rate is calculated based on the results. In human evaluation, the user plays as player 2 and interacts with the agent by entering actions in the command line.
 
+   In each mode, at the end of the game, the `eval_episode_return` information from the perspective of player 1 is recorded (if player 1 wins, `eval_episode_return` is 1; if player 1 loses, it is -1; if it's a draw, it is 0), and it is logged in the last time step.
 2. In board game environments, as the game progresses, the available actions may decrease. Therefore, it is necessary to implement the `legal_action` method. This method can be used to validate the actions provided by the players and generate child nodes during the MCTS process. Taking the Connect4 environment as an example, this method checks if each column on the game board is full and returns a list. The value in the list is 1 for columns where a move can be made and 0 for other positions.
 
 ```python
@@ -205,6 +213,7 @@ class LightZeroEnvWrapper(gym.Wrapper):
         super().__init__(env)
         ...
 ```
+
 Specifically, use the following function to wrap a gym environment into the format required by LightZero using `LightZeroEnvWrapper`. The `get_wrappered_env` function returns an anonymous function that generates a `DingEnvWrapper` instance each time it is called. This instance takes `LightZeroEnvWrapper` as an anonymous function and internally wraps the original environment into the format required by LightZero.
 
 ```python

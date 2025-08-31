@@ -38,10 +38,11 @@ splendor_alphazero_config = dict(
         simulation_env_id='splendor',
         simulation_env_config_type='self_play',
         model=dict(
-            observation_shape=(1, 15, 15),
+            model_type='SplendorAlphaZeroModel',
+            observation_shape=(1, 15, 15),  # flattened internally
             action_space_size=45,
-            num_res_blocks=1,
-            num_channels=64,
+            policy_hidden_sizes=(512, 256),
+            value_hidden_sizes=(512, 256),
         ),
         cuda=True,
         update_per_collect=update_per_collect,

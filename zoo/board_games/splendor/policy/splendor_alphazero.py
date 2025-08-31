@@ -16,6 +16,10 @@ class SplendorAlphaZeroPolicy(AlphaZeroPolicy):
             raise NotImplementedError
         self.simulate_env = SplendorLightZeroEnv(splendor_alphazero_config.env)
 
+    def default_model(self):
+        # Use our Splendor-specific MLP model
+        return 'SplendorAlphaZeroModel', ['zoo.board_games.splendor.model.splendor_alphazero_model']
+
     def _init_collect(self) -> None:
         super()._init_collect()
         # Ensure ptree MCTS returns a triple to match AlphaZeroPolicy expectations
