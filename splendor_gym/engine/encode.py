@@ -59,17 +59,66 @@ def encode_buy_reserved_index(slot: int) -> int:
 	return BUY_RESERVED_OFFSET + slot
 
 
-# Observation encoding helper (finalized layout):
+# Observation encoding helper (updated layout):
 # - Bank (6)
 # - Current player: tokens(6), bonuses(5), prestige(1), reserved_count(1)
-# - Opponent (first next player): tokens(6), bonuses(5), prestige(1), reserved_count(1)
+# - Opponent: tokens(6), bonuses(5), prestige(1), reserved_count(1)
 # - Board 12 cards × (present1, tier1, points1, color_onehot5, cost5) => 12 x 13 = 156
-# - Nobles up to 5 × (present1, req5) => 5 x 6 = 30 (we pad to 5)
+# - Reserved cards 6 slots × (present1, tier1, points1, color_onehot5, cost5, revealed1) => 6 x 14 = 84
+#   (3 slots for current player + 3 slots for opponent)
+# - Nobles up to 3 × (present1, req5) => 3 x 6 = 18 (2-player game has 3 nobles)
 # - Deck sizes (3)
 # - turn_count (1), to_play (1), move_count (1), round_over_flag (1)
-# Total length: 6 + (6+5+1+1) + (6+5+1+1) + 156 + 30 + 3 + 4 = 6 + 13 + 13 + 156 + 30 + 3 + 4 = 225
+# Total length: 6 + (6+5+1+1) + (6+5+1+1) + 156 + 84 + 18 + 3 + 4 = 6 + 13 + 13 + 156 + 84 + 18 + 3 + 4 = 297
 
-OBSERVATION_DIM = 225
+OBSERVATION_DIM = 297
+
+
+def _encode_card(card, standard_colors) -> List[int]:
+	"""Encode a single card into a 13-element vector: [present, tier, points, color_onehot(5), cost(5)]"""
+	if card is None:
+		return [0] * 13  # All zeros for empty slot
+	
+	vec = []
+	vec.append(1)  # present
+	vec.append(card.tier)  # tier 
+	vec.append(card.points)  # points
+	
+	# Color one-hot encoding
+	onehot = [0] * 5
+	onehot[standard_colors.index(card.color)] = 1
+	vec.extend(onehot)
+	
+	# Cost encoding
+	for color in standard_colors:
+		vec.append(card.cost.get(color, 0))
+	
+	return vec
+
+
+def _encode_reserved_card(card, standard_colors, revealed: bool) -> List[int]:
+	"""Encode a reserved card into a 14-element vector: [present, tier, points, color_onehot(5), cost(5), revealed]"""
+	if card is None:
+		return [0] * 14  # All zeros for empty slot
+	
+	vec = []
+	vec.append(1)  # present
+	vec.append(card.tier)  # tier 
+	vec.append(card.points)  # points
+	
+	# Color one-hot encoding
+	onehot = [0] * 5
+	onehot[standard_colors.index(card.color)] = 1
+	vec.extend(onehot)
+	
+	# Cost encoding
+	for color in standard_colors:
+		vec.append(card.cost.get(color, 0))
+	
+	# Revealed flag
+	vec.append(1 if revealed else 0)
+	
+	return vec
 
 
 def encode_observation(state) -> np.ndarray:
@@ -77,42 +126,56 @@ def encode_observation(state) -> np.ndarray:
 	vec: List[int] = []
 	# bank
 	vec.extend(state.bank)
-	# players (current and one opponent summary)
+	
+	# Current player - basic info only
 	p = state.players[state.to_play]
-	opp = state.players[(state.to_play + 1) % state.num_players]
 	vec.extend(p.tokens)
 	vec.extend(p.bonuses)
 	vec.append(p.prestige)
-	vec.append(len(p.reserved))
+	vec.append(len(p.reserved))  # reserved count
+	
+	# Opponent player - basic info only
+	opp = state.players[(state.to_play + 1) % state.num_players]
 	vec.extend(opp.tokens)
 	vec.extend(opp.bonuses)
 	vec.append(opp.prestige)
-	vec.append(len(opp.reserved))
+	vec.append(len(opp.reserved))  # reserved count
 	# board
 	for tier in (1, 2, 3):
 		for slot in range(4):
 			card = state.board[tier][slot]
-			if card is None:
-				vec.extend([0, 0, 0] + [0] * 5 + [0] * 5)
+			vec.extend(_encode_card(card, SC))
+	
+	# Reserved cards section (after board)
+	# Current player's reserved cards (3 slots) - always show full info with revealed=1
+	for i in range(3):
+		if i < len(p.reserved):
+			vec.extend(_encode_reserved_card(p.reserved[i], SC, True))  # Always revealed for current player
+		else:
+			vec.extend(_encode_reserved_card(None, SC, False))  # Empty slot
+	
+	# Opponent's reserved cards (3 slots) - show info only if revealed, otherwise all zeros
+	for i in range(3):
+		if i < len(opp.reserved):
+			if opp.revealed_reserved[i]:
+				# Revealed card - show full information
+				vec.extend(_encode_reserved_card(opp.reserved[i], SC, True))
 			else:
-				vec.append(1)  # present
-				vec.append(tier)
-				vec.append(card.points)
-				onehot = [0] * 5
-				onehot[SC.index(card.color)] = 1
-				vec.extend(onehot)
-				for c in SC:
-					vec.append(card.cost.get(c, 0))
-	# nobles (pad to 5)
-	visible = [n for n in state.nobles if n is not None]
-	for i in range(5):
+				# Hidden card - set all values to 0 (default)
+				vec.extend([0] * 14)
+		else:
+			# Empty slot
+			vec.extend(_encode_reserved_card(None, SC, False))
+	
+	# nobles (pad to 3 for 2-player game)
+	for i in range(3):
 		if i < len(state.nobles) and state.nobles[i] is not None:
 			n = state.nobles[i]
-			vec.append(1)
+			vec.append(1)  # present
 			for c in SC:
 				vec.append(n.requirements.get(c, 0))
 		else:
-			vec.extend([0, 0, 0, 0, 0, 0])
+			vec.extend([0, 0, 0, 0, 0, 0])  # [present=0, req(5)=0]
 	# decks
 	for tier in (1, 2, 3):
 		vec.append(len(state.decks[tier]))

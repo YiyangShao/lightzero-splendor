@@ -10,7 +10,6 @@ import random
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
-from splendor_gym.envs import SplendorEnv
 from splendor_gym.engine import (
     SplendorState, 
     legal_moves, 
@@ -291,6 +290,9 @@ class SplendorGameLogger:
 
 def run_logged_game(policy_type: str = "random", seed: int = 42, max_turns: int = None) -> SplendorGameLogger:
     """Run a complete game with logging."""
+    
+    # Import here to avoid circular import
+    from splendor_gym.envs import SplendorEnv
     
     # Create environment
     env = SplendorEnv(num_players=2)

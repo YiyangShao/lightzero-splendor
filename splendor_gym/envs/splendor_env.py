@@ -16,6 +16,9 @@ from ..engine import (
 from ..engine.state import TOKEN_COLORS, STANDARD_COLORS
 from ..engine.encode import TOTAL_ACTIONS, OBSERVATION_DIM, encode_observation
 
+# Import for enhanced render formatting  
+from ..scripts.game_logger import SplendorGameLogger
+
 
 class SplendorEnv(gym.Env):
 	metadata = {"render_modes": ["human"], "name": "Splendor-v0"}
@@ -51,6 +54,9 @@ class SplendorEnv(gym.Env):
 			raise RuntimeError("Cannot call step() after episode termination. Call reset().")
 		mask = legal_moves(self.state)
 		if np.sum(mask) == 0:
+			# No legal moves available - this can happen in edge cases
+			# For now, treat this as immediate termination (draw)
+			# TODO: Consider if this should follow full round logic too
 			self.state.game_over = True
 			self.state.winner_index = None
 			self.state.to_play = 0
@@ -72,21 +78,55 @@ class SplendorEnv(gym.Env):
 			if w is None and getattr(self.state, "turn_limit_reached", False):
 				reward = -0.1
 			else:
-				reward = 0.0 if w is None else (1.0 if w == self.current_player else -1.0)
+				# Reward from current player's perspective (the one who just moved)
+				current_turn_player = (self.state.to_play - 1) % self.state.num_players
+				reward = 0.0 if w is None else (1.0 if w == current_turn_player else -1.0)
 		mask = np.array(legal_moves(self.state), dtype=np.int8) if not terminated else np.zeros(self.action_space.n, dtype=np.int8)
 		info = {"action_mask": mask, "to_play": self.state.to_play}
 		if terminated and getattr(self.state, "turn_limit_reached", False):
 			info["turn_limit"] = True
+		
+		# Add final rewards for all players when game terminates
+		if terminated:
+			info["final_rewards"] = self.get_final_rewards()
+		
 		return obs, float(reward), bool(terminated), False, info
+
+	def get_final_rewards(self) -> Dict[int, float]:
+		"""Get final rewards for all players when game is terminated.
+		
+		Returns:
+			Dict mapping player_id -> reward (1.0 for winner, -1.0 for loser, 0.0 for draw)
+		"""
+		if not is_terminal(self.state):
+			raise RuntimeError("Cannot get final rewards for non-terminal state")
+		
+		w = winner(self.state)
+		rewards = {}
+		
+		for player_id in range(self.num_players):
+			if w is None:
+				# Draw
+				if getattr(self.state, "turn_limit_reached", False):
+					rewards[player_id] = -0.1  # Draw penalty
+				else:
+					rewards[player_id] = 0.0
+			else:
+				# Win/Loss
+				rewards[player_id] = 1.0 if w == player_id else -1.0
+		
+		return rewards
+
+
 
 	def render(self):
 		if self.render_mode not in ("human", None):
 			return
 		assert self.state is not None
-		p = self.state.players[self.state.to_play]
-		print(f"Turn {self.state.turn_count} — Player {self.state.to_play}")
-		print(f"Bank: {dict(zip(TOKEN_COLORS, self.state.bank))}")
-		print(f"You: tokens={dict(zip(TOKEN_COLORS, p.tokens))} bonuses={dict(zip(STANDARD_COLORS, p.bonuses))} pp={p.prestige}")  # noqa: E501
+		
+		# Use game logger's compact format
+		logger = SplendorGameLogger()
+		print(logger.format_game_state(self.state))
 
 
 def make(num_players: int = 2, render_mode: str | None = None, seed: int | None = None) -> SplendorEnv:

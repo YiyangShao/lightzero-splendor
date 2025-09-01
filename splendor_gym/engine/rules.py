@@ -232,6 +232,7 @@ def apply_action(state: SplendorState, action: int) -> SplendorState:
 		assert card is not None
 		next_state.board[tier][slot] = None
 		player.reserved.append(card)
+		player.revealed_reserved.append(True)  # Reserved from board = revealed/public
 		# Take gold if available
 		if bank[COLOR_INDEX["gold"]] > 0:
 			bank[COLOR_INDEX["gold"]] -= 1
@@ -242,6 +243,7 @@ def apply_action(state: SplendorState, action: int) -> SplendorState:
 		tier = 1 + (action - RESERVE_BLIND_OFFSET)
 		card = next_state.decks[tier].pop()
 		player.reserved.append(card)
+		player.revealed_reserved.append(False)  # Reserved from deck = hidden/private
 		if bank[COLOR_INDEX["gold"]] > 0:
 			bank[COLOR_INDEX["gold"]] -= 1
 			player.tokens[COLOR_INDEX["gold"]] += 1
@@ -249,6 +251,7 @@ def apply_action(state: SplendorState, action: int) -> SplendorState:
 		# Buy reserved
 		idx = action - BUY_RESERVED_OFFSET
 		card = player.reserved.pop(idx)
+		player.revealed_reserved.pop(idx)  # Remove the corresponding revealed flag
 		_pay_for_card(player, bank, card)
 	else:
 		raise ValueError("Invalid action index")

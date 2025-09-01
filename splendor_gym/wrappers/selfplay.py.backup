@@ -43,8 +43,11 @@ class SelfPlayWrapper(gym.Wrapper):
 		# Our move (we are always player 0)
 		obs, reward, term, trunc, info = self.env.step(action)
 		if term or trunc:
-			# Reward is from player 0 POV: +1 if we win, -1 if we lose, 0 if draw
-			return obs, reward, term, trunc, info
+			# ERROR: Game should never terminate immediately after Player 0's move
+			# In Splendor, even if Player 0 triggers win condition, Player 1 gets their turn
+			raise RuntimeError(f"Game terminated after Player 0's move! This violates Splendor rules. "
+							   f"Player 1 should always get their turn after Player 0 triggers win condition. "
+							   f"terminated: {term}, truncated: {trunc}")
 		
 		# Opponent move (should be player 1's turn)
 		if info.get("to_play", 0) == 1:

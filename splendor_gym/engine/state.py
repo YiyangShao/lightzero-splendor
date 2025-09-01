@@ -55,6 +55,7 @@ class PlayerState:
 	bonuses: List[int] = field(default_factory=lambda: [0] * len(STANDARD_COLORS))
 	prestige: int = 0
 	reserved: List[Card] = field(default_factory=list)
+	revealed_reserved: List[bool] = field(default_factory=list)  # True if reserved from board (public), False if from deck (hidden)
 	nobles: List[Noble] = field(default_factory=list)
 
 	def can_afford(self, card: Card) -> Tuple[bool, List[int]]:
@@ -90,7 +91,7 @@ class SplendorState:
 		return SplendorState(
 			num_players=self.num_players,
 			bank=list(self.bank),
-			players=[PlayerState(tokens=list(p.tokens), bonuses=list(p.bonuses), prestige=p.prestige, reserved=list(p.reserved), nobles=list(p.nobles)) for p in self.players],
+			players=[PlayerState(tokens=list(p.tokens), bonuses=list(p.bonuses), prestige=p.prestige, reserved=list(p.reserved), revealed_reserved=list(p.revealed_reserved), nobles=list(p.nobles)) for p in self.players],
 			board={tier: list(slots) for tier, slots in self.board.items()},
 			decks={tier: list(deck) for tier, deck in self.decks.items()},
 			nobles=list(self.nobles),

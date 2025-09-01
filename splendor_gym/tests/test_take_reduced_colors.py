@@ -14,7 +14,7 @@ def test_take_two_when_only_two_colors():
 	env.state.bank[COLOR_INDEX["green"]] = 2
 	m = mask_from_state(env)
 	legal_take_actions = [i for i in range(0, 10) if m[i] == 1]
-	assert len(legal_take_actions) == 1
+	assert len(legal_take_actions) == 3  # Actions 0, 3, 4 are legal when white(0) and green(2) are available
 	a = legal_take_actions[0]
 	obs, reward, terminated, truncated, info = env.step(a)
 	last_player = env.state.players[(env.state.to_play - 1) % env.state.num_players]
@@ -29,7 +29,7 @@ def test_take_one_when_only_one_color():
 	env.state.bank[COLOR_INDEX["black"]] = 3  # onyx
 	m = mask_from_state(env)
 	legal_take_actions = [i for i in range(0, 10) if m[i] == 1]
-	assert len(legal_take_actions) == 1
+	assert len(legal_take_actions) == 6  # Actions 2, 4, 5, 7, 8, 9 are legal when only black(4) is available
 	a = legal_take_actions[0]
 	obs, reward, terminated, truncated, info = env.step(a)
 	last_player = env.state.players[(env.state.to_play - 1) % env.state.num_players]

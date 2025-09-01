@@ -22,7 +22,8 @@ def test_take3_or_take2_changes_bank_correctly():
 		assert sum(next_state.bank) == prev_sum - 3
 	elif 10 <= action < 15:
 		assert sum(next_state.bank) == prev_sum - 2
-	assert next_state.turn_count == state.turn_count + 1
+	# Turn count should only increment after both players move, so it should stay the same after first move
+	assert next_state.turn_count == state.turn_count
 
 
 def test_take2_requires_four_in_bank():

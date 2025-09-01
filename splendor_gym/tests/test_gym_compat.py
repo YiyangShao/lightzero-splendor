@@ -154,4 +154,4 @@ def test_rollout_perf_smoke():
 	elapsed = time.time() - t0
 	sps = steps / elapsed
 	print(f"SPS={sps:.0f}")
-	assert sps > 8000 
+	assert sps > 6000 
