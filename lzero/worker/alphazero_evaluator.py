@@ -209,6 +209,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                     # Interact with env.
                     # ==============================================================
                     timesteps = self._env.step(actions)
+                    timesteps = to_tensor(timesteps, dtype=torch.float32)
                     for env_id, t in timesteps.items():
                         if t.info.get('abnormal', False):
                             # If there is an abnormal timestep, reset all the related variables(including this env).

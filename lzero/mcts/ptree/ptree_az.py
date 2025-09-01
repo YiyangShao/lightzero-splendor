@@ -249,22 +249,10 @@ class MCTS(object):
         actions, visits = zip(*action_visits)
 
         # Calculate the action probabilities based on the visit counts and temperature.
-        # When all visits are 0 (e.g., terminal root or expansion produced no children),
-        # fall back to a uniform distribution over legal actions to avoid NaNs.
+        # When the visit count of a node is 0, then the corresponding action probability will be 0 in order to prevent the selection of illegal actions.
         visits_t = torch.as_tensor(visits, dtype=torch.float32)
-        visits_t = torch.pow(visits_t, 1 / max(temperature, 1e-6))
-        denom = visits_t.sum().item()
-        if denom == 0:
-            legal = getattr(self.simulate_env, 'legal_actions', [])
-            if len(legal) == 0:
-                raise RuntimeError('MCTS: No legal actions available at root; state appears terminal. Cannot select action.')
-            action_probs = np.zeros_like(visits_t.numpy())
-            # Uniform over legal actions only
-            prob = 1.0 / float(len(legal))
-            for a in legal:
-                action_probs[a] = prob
-        else:
-            action_probs = (visits_t / denom).numpy()
+        visits_t = torch.pow(visits_t, 1 / temperature)
+        action_probs = (visits_t / visits_t.sum()).numpy()
 
         # Choose the next action to take based on the action probabilities.
         if sample:

@@ -5,9 +5,21 @@ import numpy as np
 import torch
 from easydict import EasyDict
 
-from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree_efficientzero
-from lzero.mcts.ctree.ctree_gumbel_muzero import gmz_tree as tree_gumbel_muzero
-from lzero.mcts.ctree.ctree_muzero import mz_tree as tree_muzero
+# Conditional imports for C++ extensions
+try:
+    from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree_efficientzero
+except ImportError:
+    tree_efficientzero = None
+
+try:
+    from lzero.mcts.ctree.ctree_gumbel_muzero import gmz_tree as tree_gumbel_muzero
+except ImportError:
+    tree_gumbel_muzero = None
+
+try:
+    from lzero.mcts.ctree.ctree_muzero import mz_tree as tree_muzero
+except ImportError:
+    tree_muzero = None
 from lzero.policy import DiscreteSupport, InverseScalarTransform, to_detach_cpu_numpy
 
 if TYPE_CHECKING:
