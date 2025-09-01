@@ -16,6 +16,14 @@ from splendor_gym.engine.encode import (
     OBSERVATION_DIM,
     encode_observation,
 )
+from splendor_gym.engine.encode import (
+    TAKE3_OFFSET, TAKE3_COUNT,
+    TAKE2_OFFSET, TAKE2_COUNT,
+    BUY_VISIBLE_OFFSET, BUY_VISIBLE_COUNT,
+    RESERVE_VISIBLE_OFFSET, RESERVE_VISIBLE_COUNT,
+    RESERVE_BLIND_OFFSET, RESERVE_BLIND_COUNT,
+    BUY_RESERVED_OFFSET, BUY_RESERVED_COUNT,
+)
 from splendor_gym.engine.state import SplendorState
 from splendor_gym.engine import (
     initial_state,
@@ -73,14 +81,8 @@ class SplendorLightZeroEnv(BaseEnv):
         self.players = [0, 1]
         self._current_player = 0
 
-        # Spaces (AlphaZero uses (C,H,W)); we reshape 225 -> (1, 15, 15)
-        self._obs_hw = (15, 15)
-        self._observation_space = gym.spaces.Box(
-            low=0,
-            high=1,
-            shape=(1, self._obs_hw[0], self._obs_hw[1]),
-            dtype=np.float32,
-        )
+        # Observation is a flat vector with length OBSERVATION_DIM
+        self._observation_space = gym.spaces.Box(low=0.0, high=1.0, shape=(OBSERVATION_DIM,), dtype=np.float32)
         self._action_space = gym.spaces.Discrete(TOTAL_ACTIONS)
         self._reward_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
 
@@ -124,22 +126,16 @@ class SplendorLightZeroEnv(BaseEnv):
         # Next player index in two-player alt-turn setting
         return 1 - self.current_player
 
-    def _encode_obs_grid(self, state: SplendorState) -> Tuple[np.ndarray, np.ndarray]:
-        vec = encode_observation(state).astype(np.float32)  # [225]
-        grid = vec.reshape(self._obs_hw[0], self._obs_hw[1])  # [H,W]
-        raw = grid[None, ...]  # [1,H,W]
+    def _encode_obs_vec(self, state: SplendorState) -> Tuple[np.ndarray, np.ndarray]:
+        vec = encode_observation(state).astype(np.float32)  # [OBSERVATION_DIM]
         if self.scale:
-            # Simple normalization by max token/card value range; keep in [0,1] best-effort
-            scaled = (grid / 50.0).clip(0.0, 1.0)[None, ...].astype(np.float32)
+            scaled = (vec / 50.0).clip(0.0, 1.0).astype(np.float32)
         else:
-            scaled = raw
-        return raw, scaled
+            scaled = vec
+        return vec, scaled
 
     def current_state(self) -> Tuple[np.ndarray, np.ndarray]:
-        raw, scaled = self._encode_obs_grid(self.state)
-        if self.channel_last:
-            # (C,H,W) -> (H,W,C)
-            return np.transpose(raw, (1, 2, 0)), np.transpose(scaled, (1, 2, 0))
+        raw, scaled = self._encode_obs_vec(self.state)
         return raw, scaled
 
     # --------- Core API ---------
@@ -177,38 +173,62 @@ class SplendorLightZeroEnv(BaseEnv):
 
     def step(self, action: int) -> BaseEnvTimestep:
         if action not in self.legal_actions:
-            # Strict per user's rule: unexpected conditions must throw.
             raise ValueError(f"Illegal action {action}; legal={self.legal_actions}")
 
-        # Apply action
-        self.state = apply_action(self.state, int(action))
+        if self.battle_mode == 'self_play_mode':
+            # Agent plays a single move
+            self.state = apply_action(self.state, int(action))
+            done = bool(is_terminal(self.state))
+            info: Dict[str, Any] = {}
+            rew = 0.0
+            if done:
+                w = winner(self.state)
+                rew = 0.0 if w is None else (1.0 if w == self.current_player else -1.0)
+                info['eval_episode_return'] = float(rew)
+            self._current_player = int(self.state.to_play)
+            obs = self._build_obs(done)
+            obs['to_play'] = int(self.current_player)
+            return BaseEnvTimestep(obs, np.array(rew, dtype=np.float32), done, info)
 
-        done = bool(is_terminal(self.state))
-        rew = 0.0
-        info: Dict[str, Any] = {}
+        elif self.battle_mode in ['play_with_bot_mode', 'eval_mode']:
+            # Player 1 (agent) move
+            self.state = apply_action(self.state, int(action))
+            done = bool(is_terminal(self.state))
+            info: Dict[str, Any] = {}
+            if done:
+                w = winner(self.state)
+                rew = 0.0 if w is None else (1.0 if w == 0 else -1.0)
+                obs = self._build_obs(done)
+                obs['to_play'] = -1
+                info['eval_episode_return'] = float(rew)
+                return BaseEnvTimestep(obs, np.array(rew, dtype=np.float32), True, info)
 
-        if done:
+            # Player 2 (bot) move
+            bot_act = self.bot_action()
+            self.state = apply_action(self.state, int(bot_act))
+            done = bool(is_terminal(self.state))
             w = winner(self.state)
-            if w is None:
-                rew = 0.0
+            if done:
+                rew = 0.0 if w is None else (1.0 if w == 0 else -1.0)
+                info['eval_episode_return'] = float(rew)
             else:
-                # Reward from perspective of player who just moved (current_player before swap)
-                rew = 1.0 if w == self.current_player else -1.0
-            info['eval_episode_return'] = float(rew)
+                rew = 0.0
+            obs = self._build_obs(done)
+            obs['to_play'] = -1
+            return BaseEnvTimestep(obs, np.array(rew, dtype=np.float32), done, info)
 
-        # Swap player turn (engine maintains state.to_play)
-        self._current_player = int(self.state.to_play)
+        else:
+            raise ValueError(f"Unsupported battle_mode: {self.battle_mode}")
 
+    def _build_obs(self, done: bool) -> Dict[str, Any]:
         action_mask = np.zeros(TOTAL_ACTIONS, dtype=np.int8) if done else np.array(legal_moves(self.state), dtype=np.int8)
-        obs = {
+        return {
             'observation': self.current_state()[1],
             'action_mask': action_mask,
             'board': pickle.dumps(self.state, protocol=pickle.HIGHEST_PROTOCOL),
             'current_player_index': self.current_player_index,
-            'to_play': int(self.current_player if self.battle_mode == 'self_play_mode' else -1),
+            'to_play': int(self.current_player),
         }
-
-        return BaseEnvTimestep(obs, np.array(rew, dtype=np.float32), done, info)
 
     # --------- Simulation helpers for AlphaZero MCTS ---------
     def simulate_action(self, action: int) -> 'SplendorLightZeroEnv':
@@ -230,6 +250,10 @@ class SplendorLightZeroEnv(BaseEnv):
         new_legal = [i for i in range(TOTAL_ACTIONS) if legal_moves(new_state)[i] == 1]
         return new_board, new_legal
 
+    def random_action(self) -> int:
+        acts = self.legal_actions
+        return int(np.random.choice(acts))
+
     def get_done_winner(self) -> Tuple[bool, int]:
         done = bool(is_terminal(self.state))
         if not done:
@@ -239,6 +263,45 @@ class SplendorLightZeroEnv(BaseEnv):
             return True, -1
         # Map internal {0,1} to {1,2} as used by LightZero board games
         return True, (1 if int(w) == 0 else 2)
+
+    def bot_action(self) -> int:
+        legal = set(self.legal_actions)
+        # 1) BUY_VISIBLE: choose highest point card
+        best = None
+        best_pts = -1
+        for a in legal:
+            if BUY_VISIBLE_OFFSET <= a < BUY_VISIBLE_OFFSET + BUY_VISIBLE_COUNT:
+                rel = a - BUY_VISIBLE_OFFSET
+                tier = rel // 4 + 1
+                slot = rel % 4
+                card = self.state.board[tier][slot]
+                if card is not None and card.points > best_pts:
+                    best_pts = card.points
+                    best = a
+        if best is not None:
+            return int(best)
+
+        # 2) TAKE3: random
+        take3 = [a for a in legal if TAKE3_OFFSET <= a < TAKE3_OFFSET + TAKE3_COUNT]
+        if take3:
+            return int(np.random.choice(take3))
+
+        # 3) RESERVE tier 1 visible, else blind tier 1
+        reserve_t1 = []
+        for a in legal:
+            if RESERVE_VISIBLE_OFFSET <= a < RESERVE_VISIBLE_OFFSET + RESERVE_VISIBLE_COUNT:
+                rel = a - RESERVE_VISIBLE_OFFSET
+                tier = rel // 4 + 1
+                if tier == 1:
+                    reserve_t1.append(a)
+        if reserve_t1:
+            return int(np.random.choice(reserve_t1))
+        blind_t1 = RESERVE_BLIND_OFFSET
+        if blind_t1 in legal:
+            return int(blind_t1)
+
+        # Fallback
+        return self.random_action()
 
     # --------- Batch env config helpers (collector/evaluator) ---------
     @staticmethod

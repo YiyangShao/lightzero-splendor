@@ -136,6 +136,12 @@ def train_alphazero(
                 break
 
             learner.train(train_data, collector.envstep)
+        # Checkpointing policy
+        # Save rolling 'latest' every 200 iters, and full snapshot every 1000 iters
+        if learner.train_iter % 200 == 0 and learner.train_iter > 0:
+            learner.save_checkpoint('iteration_latest.pth.tar')
+        if learner.train_iter % 1000 == 0 and learner.train_iter > 0:
+            learner.save_checkpoint('iteration_{}.pth.tar'.format(learner.train_iter))
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
 

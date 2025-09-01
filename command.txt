@@ -1,0 +1,20 @@
+export PYTHONPATH="/Users/yiyang/Desktop/RL-learning/lightzero-splendor:/Users/yiyang/Desktop/RL-learning/lightzero-splendor:/Users/yiyang/Desktop/RL-learning/lightzero-splendor:/Users/yiyang/Desktop/RL-learning/lightzero-splendor:/Users/yiyang/Desktop/RL-learning/lightzero-splendor:/Users/yiyang/Desktop/RL-learning/lightzero-splendor:/Users/yiyang/Desktop/RL-learning/lightzero-splendor:/Users/yiyang/Desktop/RL-learning/lightzero-splendor:"
+
+export PYTHONPATH="$(pwd):$PYTHONPATH"
+
+# Train Splendor AlphaZero (self-play)
+python zoo/board_games/splendor/config/splendor_alphazero_sp_mode_config.py
+
+# TensorBoard: view training metrics (update exp path as needed)
+tensorboard --logdir data_az --port 6006
+
+# Evaluate a Splendor checkpoint vs random/basic opponents (and save a simple log)
+# Replace CKPT_PATH with your checkpoint path, e.g., data_az/splendor_alphazero_sp_ns50_upc50_seed0/ckpt/ckpt_best.pth.tar
+python zoo/board_games/splendor/entry/splendor_eval_model.py --ckpt data_az/splendor_alphazero_sp_ns50_upc50_seed0_250831_190933/ckpt/iteration_0.pth.tar --opponent random --episodes 50 --log-txt data_az/splendor_eval_sample.txt
+python zoo/board_games/splendor/entry/splendor_eval_model.py --ckpt CKPT_PATH --opponent basic --episodes 50 --log-txt data_az/splendor_eval_sample_basic.txt
+
+# Example: Gomoku AlphaZero self-play
+python -u zoo/board_games/gomoku/config/gomoku_alphazero_sp_mode_config.py
+
+# Example: TicTacToe AlphaZero self-play
+python -u zoo/board_games/tictactoe/config/tictactoe_alphazero_sp_mode_config.py
